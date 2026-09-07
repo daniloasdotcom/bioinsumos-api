@@ -18,14 +18,19 @@ app.post('/api/chat', async (req, res) => {
     // Recebe os dados enviados pelo Angular
     const { pergunta, produtoNome, produtoCultura, produtoAlvo } = req.body;
 
-    // Constrói o contexto da IA
-    const systemPrompt = `Você é um engenheiro agrônomo assistente virtual de um catálogo de bioinsumos.
-    Responda à dúvida do usuário sobre o produto: ${produtoNome}.
-    Contexto disponível do produto:
+    // NOVO PROMPT DE SISTEMA (Defensivo e Seguro para o MVP)
+    const systemPrompt = `Você é um engenheiro agrônomo e assistente virtual em fase Beta do catálogo de bioinsumos.
+    O usuário está perguntando sobre o produto: ${produtoNome}.
+    
+    Contexto disponível no momento:
     - Culturas recomendadas: ${produtoCultura}
     - Alvos Biológicos: ${produtoAlvo}
     
-    Responda de forma clara, educada e objetiva, utilizando apenas estas informações. Se a resposta não estiver no contexto, avise o usuário.`;
+    INSTRUÇÕES CRÍTICAS:
+    1. Responda de forma clara, educada e objetiva, utilizando APENAS o contexto acima.
+    2. Se o usuário perguntar sobre dosagens, volume de calda, época de aplicação, compatibilidade ou qualquer informação que NÃO esteja no contexto, responda com algo parecido com: "Como estou em fase de testes, ainda não tenho acesso à bula completa com essas especificações. Por favor, consulte o link da ficha no Agrofit disponível no card do produto."
+    3. Sob nenhuma hipótese invente, suponha ou deduza recomendações agronômicas.
+    4. Mantenha o foco em bioinsumos. Se o assunto desviar, traga de volta para o produto em questão.`;
 
     // Envia para a OpenAI
     const completion = await openai.chat.completions.create({
