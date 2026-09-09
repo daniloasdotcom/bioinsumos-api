@@ -2,46 +2,74 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { OpenAI } = require('openai');
+const fs = require('fs').promises;
+const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Inicia a conexão com a OpenAI usando a chave do .env
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Cria a rota que o Angular vai acessar
 app.post('/api/chat', async (req, res) => {
   try {
-    // Recebe os dados enviados pelo Angular
-    const { pergunta, produtoNome, produtoCultura, produtoAlvo } = req.body;
+    const { pergunta, produtoNome, produtoCultura, produtoAlvo, numeroRegistro } = req.body;
 
-    // NOVO PROMPT DE SISTEMA (Defensivo e Seguro para o MVP)
-    const systemPrompt = `Você é um engenheiro agrônomo e assistente virtual em fase Beta do catálogo de bioinsumos.
-    O usuário está perguntando sobre o produto: ${produtoNome}.
-    
-    Contexto disponível no momento:
-    - Culturas recomendadas: ${produtoCultura}
-    - Alvos Biológicos: ${produtoAlvo}
-    
-    INSTRUÇÕES CRÍTICAS:
-    1. Responda de forma clara, educada e objetiva, utilizando APENAS o contexto acima.
-    2. Se o usuário perguntar sobre dosagens, volume de calda, época de aplicação, compatibilidade ou qualquer informação que NÃO esteja no contexto, responda com algo parecido com: "Como estou em fase de testes, ainda não tenho acesso à bula completa com essas especificações. Por favor, consulte o link da ficha no Agrofit disponível no card do produto."
-    3. Sob nenhuma hipótese invente, suponha ou deduza recomendações agronômicas.
-    4. Mantenha o foco em bioinsumos. Se o assunto desviar, traga de volta para o produto em questão.`;
+    // 1. Tenta carregar a bula do produto pelo número de registro
+    let textoBula = null;
+    if (numeroRegistro) {
+      // Remove possíveis barras ou caracteres indesejados no nome do arquivo
+      const regSanitizado = numeroRegistro.toString().replace(/[^a-zA-Z0-9_-]/g, '');
+      const caminhoBula = path.join(__dirname, 'bulas', `${regSanitizado}.txt`);
 
-    // Envia para a OpenAI
+      try {
+        textoBula = await fs.readFile(caminhoBula, 'utf-8');
+      } catch (err) {
+        // Se o arquivo não existir, segue o fluxo sem travar
+        console.log(`Bula não encontrada para o registro: ${numeroRegistro}`);
+      }
+    }
+
+    // 2. Define o Prompt do Sistema com ou sem a bula completa
+    let systemPrompt = '';
+
+    if (textoBula) {
+      systemPrompt = `Você é um engenheiro agrônomo especialista e assistente técnico do produto ${produtoNome}.
+Abaixo está o texto oficial da bula registrado no MAPA:
+
+--- INÍCIO DA BULA ---
+${textoBula}
+--- FIM DA BULA ---
+
+DIRETRIZES DE RESPOSTA:
+1. Responda com base ESTRITAMENTE nas informações contidas na bula acima.
+2. Para perguntas sobre dosagens, épocas, pH de calda ou modo de aplicação, forneça os dados exatos da tabela e instruções.
+3. Se a informação não constar na bula, responda que a informação não foi localizada na documentação oficial e oriente consultar um engenheiro agrônomo.
+4. Jamais deduza ou invente recomendações que divirjam deste documento.`;
+    } else {
+      // Fallback para produtos que ainda não possuem .txt cadastrado
+      systemPrompt = `Você é um engenheiro agrônomo e assistente do catálogo de bioinsumos.
+O usuário está perguntando sobre: ${produtoNome}.
+Culturas cadastradas: ${produtoCultura}
+Alvos Biológicos: ${produtoAlvo}
+
+INSTRUÇÕES:
+1. Responda de forma clara utilizando apenas o contexto acima.
+2. Se o usuário perguntar dosagens ou especificações de calda, informe que a bula detalhada ainda está sendo catalogada e recomende verificar a ficha no Agrofit.`;
+    }
+
+    // 3. Envio à OpenAI
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Modelo rápido e eficiente em custo
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: pergunta }
       ],
+      temperature: 0.3, // Menor temperatura garante respostas mais fiéis ao texto da bula
     });
 
-    // Devolve a resposta da IA para o Angular
     res.json({ resposta: completion.choices[0].message.content });
 
   } catch (error) {
@@ -50,7 +78,6 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// Liga o servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor da IA rodando na porta ${PORT}`);
