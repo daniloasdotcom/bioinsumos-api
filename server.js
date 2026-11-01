@@ -15,7 +15,7 @@ const openai = new OpenAI({
 
 app.post('/api/chat', async (req, res) => {
   try {
-    const { pergunta, produtoNome, produtoCultura, produtoAlvo, numeroRegistro } = req.body;
+    const { pergunta, produtoNome, produtoCultura, produtoAlvo, numeroRegistro, agrofitDisponivel } = req.body;
 
     // 1. Tenta carregar a bula do produto pelo número de registro
     let textoBula = null;
@@ -49,6 +49,11 @@ DIRETRIZES DE RESPOSTA:
 3. Se a informação não constar na bula, responda que a informação não foi localizada na documentação oficial e oriente consultar um engenheiro agrônomo.
 4. Jamais deduza ou invente recomendações que divirjam deste documento.`;
     } else {
+
+      let instrucaoAgrofit = agrofitDisponivel 
+        ? "recomende verificar a ficha no Agrofit." 
+        : "informe que as informações de comercialização (Agrofit) ainda estão sendo consolidadas no MAPA e não estão disponíveis no momento. JAMAIS recomende consultar o Agrofit.";
+      
       // Fallback para produtos que ainda não possuem .txt cadastrado
       systemPrompt = `Você é um engenheiro agrônomo e assistente do catálogo de bioinsumos.
 O usuário está perguntando sobre: ${produtoNome}.
@@ -57,7 +62,7 @@ Alvos Biológicos: ${produtoAlvo}
 
 INSTRUÇÕES:
 1. Responda de forma clara utilizando apenas o contexto acima.
-2. Se o usuário perguntar dosagens ou especificações de calda, informe que a bula detalhada ainda está sendo catalogada e recomende verificar a ficha no Agrofit.`;
+2. Se o usuário perguntar dosagens ou especificações de calda, informe que a bula detalhada ainda está sendo catalogada e ${instrucaoAgrofit}`;
     }
 
     // 3. Envio à OpenAI
